@@ -48,7 +48,7 @@ export class PublishAPI {
         await this.plugin.saveSettings();
       } else {
         this.plugin.settings.validDevtoKey = false;
-        this.plugin.settings.devtoProfile = null;
+        this.plugin.settings.devtoProfile = undefined;
         await this.plugin.saveSettings();
         throw new Error(response.body);
       }
@@ -65,7 +65,7 @@ export class PublishAPI {
     config: PublishConfig
   ): Promise<ContentResponse | null> {
     let fileName = this.plugin.settings.useFilenameAsTitle
-      ? this.plugin.app.vault.getFileByPath(path).basename
+      ? (this.plugin.app.vault.getFileByPath(path)?.basename ?? title)
       : title;
     let fileContent = await this.plugin.app.vault.adapter.read(path);
 
@@ -92,7 +92,7 @@ export class PublishAPI {
     }
 
     let firstChild = html.firstChild;
-    let heading: HTMLElement;
+    let heading!: HTMLElement;
     let firstChildIsBreak = false;
     let index = 0;
 
@@ -108,11 +108,11 @@ export class PublishAPI {
       let level = getLevelOfHeading(firstChild);
       if (level > 0) {
         if (firstChildIsBreak) {
-          html.removeChild(html.firstChild);
+          html.removeChild(html.firstChild!);
           html
             .querySelectorAll(`a[href="#${firstChild.getAttribute("name")}"]`)
-            .forEach((element: HTMLAnchorElement) => {
-              element.href = `#top`;
+            .forEach((element: Element) => {
+              (element as HTMLAnchorElement).href = `#top`;
             });
         }
         if (level === 1) {
@@ -136,10 +136,10 @@ export class PublishAPI {
         if (firstChildIsBreak) {
           html
             .querySelectorAll(`a[href="#${firstChild.getAttribute("name")}"]`)
-            .forEach((element: HTMLAnchorElement) => {
-              element.href = `#top`;
+            .forEach((element: Element) => {
+              (element as HTMLAnchorElement).href = `#top`;
             });
-          html.removeChild(html.firstChild);
+          html.removeChild(html.firstChild!);
         }
 
         heading = html.insertAfter(createHeader(fileName), firstChild);
@@ -216,13 +216,13 @@ export class PublishAPI {
     body: PublishRequest,
     path: string
   ): Promise<PublishResponse | null> {
-    let {
-      html: content,
-      markdown,
-      rawMarkdown
-    } = await this.getContent(path, body.title, body.config);
+    const contentResult = await this.getContent(path, body.title, body.config);
+    if (!contentResult) return null;
 
-    const devto_request: RequestParams = this.plugin.settings.validDevtoKey
+    const { html: content, markdown, rawMarkdown } = contentResult;
+
+    const devto_request: RequestParams | null = this.plugin.settings
+      .validDevtoKey
       ? {
           url: `${devto_url}/articles`,
           method: "POST",
@@ -246,28 +246,28 @@ export class PublishAPI {
         ? await obsidianFetch(devto_request)
         : null;
 
-    let devResponse: DevtoPublishBody;
+    let devResponse: DevtoPublishBody | undefined;
     if (devtoResponse && devtoResponse.status === 201) {
       devResponse = parseResponse<DevtoPublishBody>(devtoResponse.body);
     }
 
-    if (devtoResponse) {
+    if (devtoResponse && devResponse) {
       return {
         data: {
           html: content,
           markdown: rawMarkdown,
-          devto: devtoResponse
-            ? {
-                ...devResponse,
-                url:
-                  body.publishStatus === "public"
-                    ? devResponse.url
-                    : "https://dev.to/dashboard"
-              }
-            : null
+          devto: {
+            ...devResponse,
+            url:
+              body.publishStatus === "public"
+                ? devResponse.url
+                : "https://dev.to/dashboard"
+          }
         }
       };
     }
+
+    return null;
   }
 
   async uploadImage(file: TFile | string, id: number = 0) {
@@ -295,10 +295,11 @@ export class PublishAPI {
 
       binaryData = await response.arrayBuffer();
     }
-    const buffer = Buffer.from(binaryData);
-
-    const idBuffer = Buffer.from(`ID:${id}`);
-    const combinedBuffer = Buffer.concat([buffer, idBuffer]);
+    const imageBytes = new Uint8Array(binaryData);
+    const idBytes = new TextEncoder().encode(`ID:${id}`);
+    const combinedBuffer = new Uint8Array(imageBytes.length + idBytes.length);
+    combinedBuffer.set(imageBytes, 0);
+    combinedBuffer.set(idBytes, imageBytes.length);
 
     const boundary = "----FormBoundaryXYZ";
     const bodyParts: ArrayBuffer[] = [];
@@ -343,7 +344,7 @@ export class PublishAPI {
         new Notice(response.body);
       }
     } catch (error) {
-      new Notice(error);
+      new Notice(String(error));
     }
   }
 
@@ -362,7 +363,7 @@ export class PublishAPI {
         return dimensionMap[dimensionLink];
       }
 
-      let file: TFile;
+      let file: TFile | undefined | null;
       if (fileMap.has(link)) {
         file = fileMap.get(link);
       } else {
@@ -411,9 +412,10 @@ export class PublishAPI {
           image.setAttribute("data-width", width.toString());
           image.setAttribute("data-height", height.toString());
           const block = image.parentElement;
-
-          block.style.maxWidth = `${width}px`;
-          block.style.maxHeight = `${height}px`;
+          if (block) {
+            block.style.maxWidth = `${width}px`;
+            block.style.maxHeight = `${height}px`;
+          }
         }
 
         image.setAttribute("src", link);

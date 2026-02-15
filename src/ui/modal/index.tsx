@@ -28,7 +28,7 @@ class ReactModal extends Modal {
   }
 
   onOpen() {
-    this.root.render(
+    this.root!.render(
       <PluginProvider plugin={this.plugin}>
         {this.getModalContent()}
       </PluginProvider>
@@ -42,7 +42,7 @@ class ReactModal extends Modal {
   getModalContent(): ReactNode {
     switch (this.modalType) {
       case "TokenValidatorModal":
-        return <TokenValidatorModal modal={this} site={this.site} />;
+        return <TokenValidatorModal modal={this} site={this.site!} />;
       case "PublishModal":
         return <PublishModal />;
     }

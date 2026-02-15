@@ -147,9 +147,12 @@ export const saveHtmlAsPng = async (
 
     const dataUrl = resizedCanvas.toDataURL("image/png", 1.0);
     const base64Data = dataUrl.split(",")[1];
-    const arrayBuffer = Uint8Array.from(
-      Buffer.from(base64Data, "base64")
-    ).buffer;
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const arrayBuffer = bytes.buffer;
 
     await app.vault.adapter.writeBinary(filePath, arrayBuffer);
 
@@ -281,16 +284,18 @@ const renderTOC = (
         `${useNumberedList ? `${index + 1}.` : "-"} `
     );
 
-    let originalId: string;
-    let id: string;
-    let url: string;
+    let originalId: string | null = null;
+    let id: string | null = null;
+    let url: string | null = null;
 
     if (item.element) {
       originalId = item.element.getAttribute("original-id");
       id = item.element.getAttribute("toc-id");
-      url = "#" + id;
-      item.element.setAttribute("name", id);
-      item.element.setAttribute("id", id);
+      url = id ? "#" + id : null;
+      if (id) {
+        item.element.setAttribute("name", id);
+        item.element.setAttribute("id", id);
+      }
     }
 
     if (originalId && id && url) {
@@ -298,18 +303,18 @@ const renderTOC = (
       Array.from(anchorsWithHash)
         .filter((a) => {
           return (
-            a.getAttribute("href").toLowerCase() ===
-            `#${originalId.toLowerCase()}`
+            (a.getAttribute("href") ?? "").toLowerCase() ===
+            `#${originalId!.toLowerCase()}`
           );
         })
         .forEach((a) => {
-          a.setAttribute("href", url);
+          a.setAttribute("href", url!);
         });
     }
 
     span.appendChild(
-      url
-        ? createLinkElement(url, item.element.textContent.trim())
+      url && item.element
+        ? createLinkElement(url, item.element.textContent?.trim() ?? "")
         : createSpan("[ ]")
     );
 
@@ -319,7 +324,7 @@ const renderTOC = (
     markdown += `\n${
       "\t".repeat(item.level - 1) +
       `${useNumberedList ? `${index + 1}.` : "-"} `
-    } ${url ? `[${item.element.textContent.trim()}](${url})` : "[ ]"} `;
+    } ${url && item.element ? `[${item.element.textContent?.trim() ?? ""}](${url})` : "[ ]"} `;
 
     if (item.children.length > 0) {
       markdown = renderTOC(
@@ -594,4 +599,3 @@ export const toggleClass = (
     element.classList.remove(className);
   }
 };
-

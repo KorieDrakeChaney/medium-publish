@@ -72,7 +72,7 @@ export const PublishModal = () => {
     const load = async () => {
       const currentView =
         plugin.app.workspace.getActiveViewOfType(MarkdownView);
-      if (currentView) {
+      if (currentView && currentView.file) {
         setTitle(currentView.file.basename);
         setCurrentFile(currentView.file.path);
       } else {
@@ -105,7 +105,7 @@ export const PublishModal = () => {
         setLoading(false);
         return;
       }
-      await plugin.services.api.publish(body, currentFile).then((response) => {
+      await plugin.services.api.publish(body, currentFile!).then((response) => {
         if (response) {
           setData(response.data);
           new Notice("Published successfully");
@@ -116,11 +116,13 @@ export const PublishModal = () => {
         setLoading(false);
       });
     } else {
-      const { html, rawMarkdown } = await plugin.services.api.getContent(
-        currentFile,
+      const contentResult = await plugin.services.api.getContent(
+        currentFile!,
         title,
         publishConfig
       );
+      if (!contentResult) return;
+      const { html, rawMarkdown } = contentResult;
 
       setData({
         html,

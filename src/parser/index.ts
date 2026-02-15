@@ -300,9 +300,9 @@ export const tokenizeBlock = (
                 tokens.push({
                   type: "image",
                   alt,
-                  caption: null,
+                  caption: "",
                   url: alt,
-                  dimensions: dimension
+                  dimensions: dimension ?? undefined
                 });
                 isImage = false;
               } else {
@@ -404,10 +404,10 @@ export const tokenizeBlock = (
           if (isImage) {
             currentToken = {
               type: "image",
-              caption: null,
+              caption: "",
               alt,
               url: "",
-              dimensions: dimension
+              dimensions: dimension ?? undefined
             };
           } else {
             currentToken = {
@@ -450,7 +450,7 @@ export const tokenizeBlock = (
             break;
           }
 
-          if (currentToken.type === "image") {
+          if (currentToken?.type === "image") {
             for (let i = cursor; i < urlEndCursor; i++) {
               const quoteMatch = line[i].match(/["'`]/);
               if (quoteMatch) {
@@ -752,7 +752,7 @@ export const parser = async (
     ".workspace-leaf.mod-active .workspace-leaf-content .view-content .markdown-source-view .cm-content"
   ) as HTMLElement;
 
-  const markdownView = app.workspace.getActiveViewOfType(MarkdownView);
+  const markdownView = app.workspace.getActiveViewOfType(MarkdownView)!;
   const currentValue = markdownView.editor.getValue();
 
   let footnoteMap: Record<string, string> = {};
@@ -954,7 +954,7 @@ export const parser = async (
 
         if (cmCallout) {
           try {
-            const { width, height } = await saveHtmlAsPng(
+            const result = await saveHtmlAsPng(
               app,
               cmCallout,
               filePath,
@@ -974,19 +974,22 @@ export const parser = async (
               }
             );
 
-            const imageBlock = createImage(filePath, "Code Block Widget");
+            if (result) {
+              const { width, height } = result;
+              const imageBlock = createImage(filePath, "Code Block Widget");
 
-            const image = imageBlock.querySelector("img") as HTMLImageElement;
+              const image = imageBlock.querySelector("img") as HTMLImageElement;
 
-            image.setAttribute("data-width", width.toString());
-            image.setAttribute("data-height", height.toString());
-            image.setAttribute("is-code-block", "true");
-            imageBlock.style.maxWidth = `${width}px`;
-            imageBlock.style.maxHeight = `${height}px`;
+              image.setAttribute("data-width", width.toString());
+              image.setAttribute("data-height", height.toString());
+              image.setAttribute("is-code-block", "true");
+              imageBlock.style.maxWidth = `${width}px`;
+              imageBlock.style.maxHeight = `${height}px`;
 
-            markdown.content += image.outerHTML + "\n";
-            rawMarkdown += `![${image.getAttribute("alt")}](${filePath})\n`;
-            container.appendChild(imageBlock);
+              markdown.content += image.outerHTML + "\n";
+              rawMarkdown += `![${image.getAttribute("alt")}](${filePath})\n`;
+              container.appendChild(imageBlock);
+            }
           } catch (e) {
             console.error(e);
           }
@@ -1082,7 +1085,7 @@ export const parser = async (
               currentDocument.appendChild(cmEmbed);
             }
 
-            const { width, height } = await saveHtmlAsPng(
+            const codeResult = await saveHtmlAsPng(
               app,
               cmEmbed,
               filePath,
@@ -1132,10 +1135,14 @@ export const parser = async (
               }
             );
 
+            if (!codeResult)
+              throw new Error("Failed to save code block as PNG");
+            const { width, height } = codeResult;
+
             const imageBlock = createImage(filePath, "Code Block Widget");
             const image = imageBlock.querySelector("img") as HTMLImageElement;
 
-            let markdown_caption: string;
+            let markdown_caption: string = "";
             if (
               block.caption ||
               (appSettings.useCodeBlockLanguageForCaption &&
@@ -1224,7 +1231,7 @@ export const parser = async (
 
         if (cmEmbed) {
           try {
-            const { width, height } = await saveHtmlAsPng(
+            const mathResult = await saveHtmlAsPng(
               app,
               cmEmbed,
               filePath,
@@ -1252,19 +1259,22 @@ export const parser = async (
               }
             );
 
-            const imageBlock = createImage(filePath, "Code Block Widget");
-            const image = imageBlock.querySelector("img") as HTMLImageElement;
+            if (mathResult) {
+              const { width, height } = mathResult;
+              const imageBlock = createImage(filePath, "Code Block Widget");
+              const image = imageBlock.querySelector("img") as HTMLImageElement;
 
-            image.setAttribute("data-width", width.toString());
-            image.setAttribute("data-height", height.toString());
-            image.setAttribute("is-code-block", "true");
-            imageBlock.style.maxWidth = `${width}px`;
-            imageBlock.style.maxHeight = `${height}px`;
+              image.setAttribute("data-width", width.toString());
+              image.setAttribute("data-height", height.toString());
+              image.setAttribute("is-code-block", "true");
+              imageBlock.style.maxWidth = `${width}px`;
+              imageBlock.style.maxHeight = `${height}px`;
 
-            markdown.content += image.outerHTML + "\n";
-            rawMarkdown += `![${image.getAttribute("alt")}](${filePath})\n`;
+              markdown.content += image.outerHTML + "\n";
+              rawMarkdown += `![${image.getAttribute("alt")}](${filePath})\n`;
 
-            container.appendChild(imageBlock);
+              container.appendChild(imageBlock);
+            }
           } catch (e) {
             console.error(e);
           }
@@ -1289,7 +1299,7 @@ export const parser = async (
           const table = cmEmbed.querySelector("table") as HTMLTableElement;
           table.style.backgroundColor = "var(--background-primary)";
           try {
-            const { width, height } = await saveHtmlAsPng(
+            const tableResult = await saveHtmlAsPng(
               app,
               cmEmbed,
               filePath,
@@ -1308,22 +1318,25 @@ export const parser = async (
               }
             );
 
-            const imageBlock = createImage(filePath, "Code Block Widget");
+            if (tableResult) {
+              const { width, height } = tableResult;
+              const imageBlock = createImage(filePath, "Code Block Widget");
 
-            const image = imageBlock.querySelector("img") as HTMLImageElement;
-            image.setAttribute("data-width", width.toString());
-            image.setAttribute("data-height", height.toString());
-            image.setAttribute("is-code-block", "true");
-            imageBlock.style.maxWidth = `${width}px`;
-            imageBlock.style.maxHeight = `${height}px`;
+              const image = imageBlock.querySelector("img") as HTMLImageElement;
+              image.setAttribute("data-width", width.toString());
+              image.setAttribute("data-height", height.toString());
+              image.setAttribute("is-code-block", "true");
+              imageBlock.style.maxWidth = `${width}px`;
+              imageBlock.style.maxHeight = `${height}px`;
 
-            container.appendChild(imageBlock);
-            if (appSettings.convertTableToPng) {
-              markdown.content += image.outerHTML + "\n";
-              rawMarkdown += `![${image.getAttribute("alt")}](${filePath})\n`;
-            } else {
-              markdown.content += markdown_table + "\n";
-              rawMarkdown += markdown_table + "\n";
+              container.appendChild(imageBlock);
+              if (appSettings.convertTableToPng) {
+                markdown.content += image.outerHTML + "\n";
+                rawMarkdown += `![${image.getAttribute("alt")}](${filePath})\n`;
+              } else {
+                markdown.content += markdown_table + "\n";
+                rawMarkdown += markdown_table + "\n";
+              }
             }
           } catch (e) {
             console.error(e);
@@ -1501,8 +1514,8 @@ export class Parser {
 
     return {
       html: container,
-      markdown: markdown,
-      rawMarkdown: (createTOC ? tocMarkdown + "\n" : "") + rawMarkdown
+      markdown: this.markdown,
+      rawMarkdown: (this.createTOC ? tocMarkdown + "\n" : "") + this.rawMarkdown
     };
   }
 }
