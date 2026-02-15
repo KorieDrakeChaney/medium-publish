@@ -10,10 +10,10 @@ import {
   Toggle,
   VisualDropdown
 } from "src/ui/components";
-import type { PublicationObject, PublishBody } from "src/api/response";
+import type { PublishBody } from "src/api/response";
 import Tag from "./tag";
-import { MediumLicense, PublishConfig } from "src/api/types";
-import { DevtoIcon, MediumIcon } from "src/icons";
+import { PublishConfig } from "src/api/types";
+import { DevtoIcon } from "src/icons";
 import { FaCheck, FaXmark } from "react-icons/fa6";
 import { PublishRequest } from "src/api/request";
 import SettingNumberInput from "src/ui/components/number-input/number-input";
@@ -22,11 +22,10 @@ type PublishStatus = "public" | "draft" | "unlisted";
 
 interface SelectProps {
   onToggle: (isSelected: boolean) => void;
-  site: "Medium" | "Dev.to";
   disabled?: boolean;
 }
 
-const Select = ({ onToggle, site, disabled }: SelectProps) => {
+const Select = ({ onToggle, disabled }: SelectProps) => {
   const [isSelected, setIsSelected] = useState(false);
   return (
     <div
@@ -39,13 +38,13 @@ const Select = ({ onToggle, site, disabled }: SelectProps) => {
         onToggle(!isSelected);
       }}
     >
-      {site === "Medium" ? <MediumIcon /> : <DevtoIcon />}
+      <DevtoIcon />
       <div
         className={`${styles["select"]} ${isSelected ? styles["active"] : ""} `}
       >
         {isSelected ? <FaCheck /> : <FaXmark />}
       </div>
-      <div className={styles["select-site"]}>{site}</div>
+      <div className={styles["select-site"]}>Dev.to</div>
     </div>
   );
 };
@@ -55,26 +54,17 @@ export const PublishModal = () => {
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<PublishStatus>("public");
   const [tags, setTags] = useState<Record<string, string>>({});
-  const [notify, setNotify] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [errorCount, setErrorCount] = useState(0);
   const [currentFile, setCurrentFile] = useState<null | string>(null);
-  const [publications, setPublications] = useState<null | PublicationObject[]>(
-    []
-  );
   const [canonicalURL, setCanonicalURL] = useState("");
-  const [selectedPublication, setSelectedPublication] = useState<
-    null | string
-  >();
   const [series, setSeries] = useState<string>("");
   const [description, setDescription] = useState<string>("");
-  const [license, setLicense] = useState<MediumLicense>("all-rights-reserved");
   const [init, setInit] = useState(false);
   const [data, setData] = useState<PublishBody | null>(null);
 
   const [publishConfig, setPublishConfig] = useState<PublishConfig>({
-    medium: false,
     devto: false
   });
 
@@ -85,14 +75,6 @@ export const PublishModal = () => {
       if (currentView) {
         setTitle(currentView.file.basename);
         setCurrentFile(currentView.file.path);
-
-        if (plugin.settings.validMediumKey) {
-          await plugin.services.api.getPublications().then((response) => {
-            if (response) {
-              setPublications(response.data);
-            }
-          });
-        }
       } else {
         new Notice("No markdown file is being viewed");
       }
@@ -107,18 +89,15 @@ export const PublishModal = () => {
       title,
       description,
       series,
-      license,
       canonicalURL,
       config: publishConfig,
       tags: Object.values(tags),
-      publishStatus: status,
-      notifyFollowers: notify,
-      publicationId: selectedPublication
+      publishStatus: status
     };
 
     setLoading(true);
 
-    if (publishConfig.medium || publishConfig.devto) {
+    if (publishConfig.devto) {
       if (!title && publishConfig.devto) {
         new Notice("Title is required for Dev.to");
         setError("Title is required for Dev.to");
@@ -140,8 +119,7 @@ export const PublishModal = () => {
       const { html, rawMarkdown } = await plugin.services.api.getContent(
         currentFile,
         title,
-        publishConfig,
-        true
+        publishConfig
       );
 
       setData({
@@ -160,16 +138,8 @@ export const PublishModal = () => {
         <div className={styles["select-container"]}>
           <Select
             onToggle={(isSelected) =>
-              setPublishConfig({ ...publishConfig, medium: isSelected })
-            }
-            site="Medium"
-            disabled={loading || !plugin.settings.validMediumKey}
-          />
-          <Select
-            onToggle={(isSelected) =>
               setPublishConfig({ ...publishConfig, devto: isSelected })
             }
-            site="Dev.to"
             disabled={loading || !plugin.settings.validDevtoKey}
           />
         </div>
@@ -199,11 +169,6 @@ export const PublishModal = () => {
           <div className={styles["publish-success"]}>
             <h2>Links</h2>
             <div className={styles["publish-links"]}>
-              {data.medium && (
-                <a href={data.medium.url} target="_blank" rel="noreferrer">
-                  Medium
-                </a>
-              )}
               {data.devto && (
                 <a href={data.devto.url} target="_blank" rel="noreferrer">
                   Dev.to
@@ -224,7 +189,7 @@ export const PublishModal = () => {
             <VisualDropdown title="Config">
               <SettingItem
                 name="Use Dark Theme"
-                desc="Use dark theme for the generated images. Light theme is used by default for better compatibility with Medium"
+                desc="Use dark theme for the generated images"
               >
                 <Toggle
                   value={plugin.settings.useDarkTheme}
@@ -236,7 +201,7 @@ export const PublishModal = () => {
               </SettingItem>
               <SettingItem
                 name="Code Snippets as PNG"
-                desc="Instead of using Medium's code block, convert code snippets to PNG images"
+                desc="Convert code snippets to PNG images instead of using code blocks"
               >
                 <Toggle
                   value={plugin.settings.convertCodeToPng}
@@ -306,7 +271,7 @@ export const PublishModal = () => {
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
-              {(publishConfig.medium || publishConfig.devto) && (
+              {publishConfig.devto && (
                 <div className={styles["publish-input"]}>
                   <label className={styles["publish-label"]}>Tags</label>
                   <input
@@ -335,7 +300,7 @@ export const PublishModal = () => {
                   />
                 </div>
               )}
-              {(publishConfig.medium || publishConfig.devto) && (
+              {publishConfig.devto && (
                 <div
                   className={styles["tags-container"]}
                   style={{
@@ -355,7 +320,7 @@ export const PublishModal = () => {
                   ))}
                 </div>
               )}
-              {(publishConfig.medium || publishConfig.devto) && (
+              {publishConfig.devto && (
                 <div className={styles["publish-input"]}>
                   <label className={styles["publish-label"]}>
                     Canonical URL
@@ -369,58 +334,6 @@ export const PublishModal = () => {
                 </div>
               )}
             </VisualDropdown>
-            {publishConfig.medium && (
-              <VisualDropdown title="Medium" open>
-                <SettingItem
-                  name="Publication"
-                  desc="The publication to publish the article to"
-                >
-                  <DropDown
-                    options={
-                      publications
-                        ? publications.reduce<Record<string, string>>(
-                            (acc, curr) => {
-                              acc[curr.id] = curr.name;
-                              return acc;
-                            },
-                            {
-                              none: "None"
-                            }
-                          )
-                        : {}
-                    }
-                    value={selectedPublication || "none"}
-                    onChange={(value) => setSelectedPublication(value)}
-                  />
-                </SettingItem>
-                <SettingItem
-                  name="License"
-                  desc="The license that the article is published under"
-                >
-                  <DropDown
-                    options={{
-                      "all-rights-reserved": "All Rights Reserved",
-                      "cc-40-by": "CC 4.0 BY",
-                      "cc-40-by-sa": "CC 4.0 BY-SA",
-                      "cc-40-by-nd": "CC 4.0 BY-ND",
-                      "cc-40-by-nc": "CC 4.0 BY-NC",
-                      "cc-40-by-nc-sa": "CC 4.0 BY-NC-SA",
-                      "cc-40-by-nc-nd": "CC 4.0 BY-NC-ND"
-                    }}
-                    value={license}
-                    onChange={(value) => {
-                      setLicense(value as MediumLicense);
-                    }}
-                  />
-                </SettingItem>
-                <SettingItem
-                  name="Notify Followers"
-                  desc="Whether to notify followers the user has published"
-                >
-                  <Toggle value={notify} onChange={() => setNotify(!notify)} />
-                </SettingItem>
-              </VisualDropdown>
-            )}
             {publishConfig.devto && (
               <VisualDropdown title="Dev.to" open>
                 <label className={styles["publish-label"]}>Description</label>
@@ -442,21 +355,16 @@ export const PublishModal = () => {
               </VisualDropdown>
             )}
           </div>
-          {(publishConfig.medium || publishConfig.devto) && (
+          {publishConfig.devto && (
             <div>
               <label className={styles["publish-label"]}>Publish Status</label>
               <div
                 className={styles["publish-status-container"]}
                 style={{
-                  gridTemplateColumns: publishConfig.medium
-                    ? "repeat(3, 1fr)"
-                    : "repeat(2, 1fr)"
+                  gridTemplateColumns: "repeat(2, 1fr)"
                 }}
               >
-                {(publishConfig.medium
-                  ? ["public", "draft", "unlisted"]
-                  : ["public", "unlisted"]
-                ).map((s: PublishStatus) => (
+                {(["public", "unlisted"] as PublishStatus[]).map((s) => (
                   <div
                     key={s}
                     className={`${styles["publish-status-button"]} ${
@@ -483,11 +391,7 @@ export const PublishModal = () => {
             </div>
             <Button
               style="primary"
-              name={
-                !publishConfig.devto && !publishConfig.medium
-                  ? "Generate"
-                  : "Publish"
-              }
+              name={!publishConfig.devto ? "Generate" : "Publish"}
               onClick={onPublish}
             />
           </div>

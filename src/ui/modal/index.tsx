@@ -1,6 +1,6 @@
 import { Modal } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
-import type TodoistMarkdownPlugin from "../../main";
+import type MdBlogger from "../../main";
 import type { ReactNode } from "react";
 import { PluginProvider } from "../context";
 import { TokenValidatorModal } from "./tokenValidator/tokenValidator";
@@ -10,13 +10,13 @@ type ModalType = "TokenValidatorModal" | "PublishModal";
 
 class ReactModal extends Modal {
   private root: Root | undefined;
-  private plugin: TodoistMarkdownPlugin;
+  private plugin: MdBlogger;
   private modalType: ModalType;
-  private site?: "Medium" | "Dev.to" | "Imgur";
+  private site?: "Dev.to" | "Imgur";
   constructor(
-    plugin: TodoistMarkdownPlugin,
+    plugin: MdBlogger,
     type: ModalType,
-    site?: "Medium" | "Dev.to" | "Imgur",
+    site?: "Dev.to" | "Imgur",
     onClose?: () => void
   ) {
     super(plugin.app);
@@ -50,9 +50,9 @@ class ReactModal extends Modal {
 }
 
 export const createReactModal = (
-  plugin: TodoistMarkdownPlugin,
+  plugin: MdBlogger,
   modalType: ModalType,
-  site?: "Medium" | "Dev.to" | "Imgur",
+  site?: "Dev.to" | "Imgur",
   onClose?: () => void
 ) => {
   return new ReactModal(plugin, modalType, site, onClose);

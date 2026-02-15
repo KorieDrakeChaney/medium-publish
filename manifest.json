@@ -1,7 +1,7 @@
 {
   "id": "markdown-publish",
   "name": "Markdown Publish",
-  "description": "Publish your notes to Medium or Dev.to",
+  "description": "Publish your notes to Dev.to",
   "author": "KorieDrakeChaney",
   "repo": "KorieLochten/markdown-publish",
   "version": "1.0.0",

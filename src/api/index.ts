@@ -14,17 +14,14 @@ import {
   DevtoMeResponse,
   DevtoPublishBody,
   ImageResponse,
-  MediumMeResponse,
-  MediumPublishBody,
-  PublicationResponse,
   PublishResponse
 } from "./response";
-import { parser, tokenizer } from "../parser";
+import { parser, Tokenizer } from "../parser";
 import MdBlogger from "src/main";
 import { PublishConfig } from "./types";
 import { PublishRequest } from "./request";
+import { Markdown } from "src/types";
 
-const medium_url = "https://api.medium.com/v1";
 const devto_url = "https://dev.to/api";
 const imgur_url = "https://api.imgur.com/3";
 
@@ -62,60 +59,10 @@ export class PublishAPI {
     }
   }
 
-  async validateMediumToken(token?: string): Promise<boolean> {
-    try {
-      const request: RequestParams = {
-        url: `${medium_url}/me`,
-        method: "GET",
-        headers: this.getMediumHeaders(
-          token ?? this.plugin.settings.mediumToken
-        )
-      };
-
-      const response = await obsidianFetch(request);
-
-      if (response.status === 200) {
-        const { data } = parseResponse<MediumMeResponse>(response.body);
-        this.plugin.settings.mediumProfile = data;
-        this.plugin.settings.validMediumKey = true;
-        await this.plugin.saveSettings();
-      } else {
-        this.plugin.settings.validMediumKey = false;
-        this.plugin.settings.mediumProfile = null;
-        await this.plugin.saveSettings();
-        throw new Error(response.body);
-      }
-
-      return response.status === 200;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  async getPublications(): Promise<PublicationResponse | null> {
-    const id = this.plugin.settings.mediumProfile.id;
-    if (!id) return null;
-    const request: RequestParams = {
-      url: `${medium_url}/users/${id}/publications`,
-      method: "GET",
-      headers: this.getMediumHeaders(this.plugin.settings.mediumToken)
-    };
-
-    const response = await obsidianFetch(request);
-
-    if (response.status === 200) {
-      return parseResponse<PublicationResponse>(response.body);
-    } else {
-      new Notice(response.body);
-      return null;
-    }
-  }
-
   async getContent(
     path: string,
     title: string,
-    config: PublishConfig,
-    parse: boolean = false
+    config: PublishConfig
   ): Promise<ContentResponse | null> {
     let fileName = this.plugin.settings.useFilenameAsTitle
       ? this.plugin.app.vault.getFileByPath(path).basename
@@ -123,13 +70,15 @@ export class PublishAPI {
     let fileContent = await this.plugin.app.vault.adapter.read(path);
 
     let { html, markdown, rawMarkdown } = await parser(
-      tokenizer(removeComments(fileContent)),
+      new Tokenizer(removeComments(fileContent)).tokenize(),
       this.plugin.app,
       config,
       this.plugin.settings
     );
 
-    if (config.devto && !config.medium) {
+    console.log(html, markdown, rawMarkdown);
+
+    if (config.devto) {
       markdown = {
         title: `# ${fileName}\n`,
         subtitle: undefined,
@@ -213,6 +162,7 @@ export class PublishAPI {
       this.plugin.settings.useNumberedTOC,
       index
     );
+
     const tocMarkdown = createMarkdownTOC(
       markdown.content,
       this.plugin.settings.useNumberedTOC
@@ -272,27 +222,6 @@ export class PublishAPI {
       rawMarkdown
     } = await this.getContent(path, body.title, body.config);
 
-    const medium_request: RequestParams | null = this.plugin.settings
-      .validMediumKey
-      ? {
-          url: body.publicationId
-            ? `${medium_url}/publications/${body.publicationId}/posts`
-            : `${medium_url}/users/${this.plugin.settings.mediumProfile.id}/posts`,
-          method: "POST",
-          headers: this.getMediumHeaders(this.plugin.settings.mediumToken),
-          body: JSON.stringify({
-            title: body.title,
-            content: content,
-            contentFormat: "html",
-            tags: body.tags,
-            publishStatus: body.publishStatus,
-            license: body.license,
-            canonicalUrl: body.canonicalURL,
-            notifyFollowers: body.notifyFollowers
-          })
-        }
-      : null;
-
     const devto_request: RequestParams = this.plugin.settings.validDevtoKey
       ? {
           url: `${devto_url}/articles`,
@@ -312,10 +241,6 @@ export class PublishAPI {
         }
       : null;
 
-    let mediumResponse =
-      body.config.medium && medium_request
-        ? await obsidianFetch(medium_request)
-        : null;
     let devtoResponse =
       body.config.devto && devto_request
         ? await obsidianFetch(devto_request)
@@ -326,19 +251,11 @@ export class PublishAPI {
       devResponse = parseResponse<DevtoPublishBody>(devtoResponse.body);
     }
 
-    let data: MediumPublishBody;
-    if (mediumResponse && mediumResponse.status === 201) {
-      data = parseResponse<{ data: MediumPublishBody }>(
-        mediumResponse.body
-      ).data;
-    }
-
-    if (mediumResponse || devtoResponse) {
+    if (devtoResponse) {
       return {
         data: {
           html: content,
           markdown: rawMarkdown,
-          medium: mediumResponse ? data : null,
           devto: devtoResponse
             ? {
                 ...devResponse,
@@ -504,14 +421,6 @@ export class PublishAPI {
     }
 
     return dimensionMap;
-  }
-
-  private getMediumHeaders(token: string) {
-    return {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    };
   }
 
   private getDevtoHeaders(token: string) {

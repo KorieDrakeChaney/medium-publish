@@ -594,3 +594,4 @@ export const toggleClass = (
     element.classList.remove(className);
   }
 };
+

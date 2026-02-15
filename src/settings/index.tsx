@@ -1,5 +1,5 @@
 import { PluginSettingTab, prepareFuzzySearch, SearchResult } from "obsidian";
-import type { DevtoMeData, MediumMeData } from "../api/response";
+import type { DevtoMeData } from "../api/response";
 import { createReactModal } from "../ui/modal";
 import styles from "./setting.module.css";
 import MdBlogger from "../main";
@@ -37,7 +37,6 @@ type GeneralFontFamily =
   | "Verdana";
 
 export type Settings = {
-  mediumToken: string;
   devtoToken: string;
   imgurClientId: string;
   assetDirectory: string;
@@ -56,17 +55,14 @@ export type Settings = {
   smoothing: boolean;
   generalFontFamily: GeneralFontFamily;
   codeFontFamily: CodeFontFamily;
-  mediumProfile?: MediumMeData;
   devtoProfile?: DevtoMeData;
-  validMediumKey?: boolean;
   validDevtoKey?: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  mediumToken: "",
   devtoToken: "",
   imgurClientId: "",
-  assetDirectory: "medium-assets",
+  assetDirectory: "publish-assets",
   loadTime: 100,
   convertCodeToPng: false,
   createTOC: true,
@@ -211,15 +207,13 @@ const SettingFileInput = ({
 };
 
 interface SettingApiKeyProps {
-  site: "Medium" | "Dev.to" | "Imgur";
+  site: "Dev.to" | "Imgur";
 }
 
 const SettingApiKey = ({ site }: SettingApiKeyProps) => {
   const { plugin } = usePluginContext();
   const [isValid, setIsValid] = useState<boolean>(
-    site === "Medium"
-      ? plugin.settings.validMediumKey
-      : plugin.settings.validDevtoKey
+    site === "Dev.to" ? (plugin.settings.validDevtoKey ?? false) : false
   );
 
   return (
@@ -229,16 +223,16 @@ const SettingApiKey = ({ site }: SettingApiKeyProps) => {
           onClick={async () => {
             createReactModal(plugin, "TokenValidatorModal", site, () => {
               setIsValid(
-                site === "Medium"
-                  ? plugin.settings.validMediumKey
-                  : plugin.settings.validDevtoKey
+                site === "Dev.to"
+                  ? (plugin.settings.validDevtoKey ?? false)
+                  : false
               );
             }).open();
           }}
         >
           Set Token
         </button>
-        {(site === "Medium" || site === "Dev.to") && (
+        {site === "Dev.to" && (
           <div className={isValid ? styles["checkmark"] : styles["xmark"]}>
             {isValid ? <FaCheck /> : <FaXmark />}
           </div>
@@ -258,9 +252,6 @@ const Settings = () => {
 
   return (
     <div className={styles["settings-container"]}>
-      <SettingGroup title="Medium">
-        <SettingApiKey site="Medium" />
-      </SettingGroup>
       <SettingGroup title="Dev.to">
         <SettingApiKey site="Dev.to" />
       </SettingGroup>

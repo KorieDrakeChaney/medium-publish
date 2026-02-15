@@ -1,15 +1,15 @@
 import { createContext, useContext, ReactNode } from "react";
-import TodoistMarkdownPlugin from "src/main";
+import MdBlogger from "src/main";
 
 interface PluginState {
-  plugin: TodoistMarkdownPlugin;
+  plugin: MdBlogger;
 }
 
 const PluginContext = createContext<PluginState | undefined>(undefined);
 
 interface PluginProviderProps {
   children: ReactNode;
-  plugin: TodoistMarkdownPlugin;
+  plugin: MdBlogger;
 }
 
 export const PluginProvider = ({ children, plugin }: PluginProviderProps) => {

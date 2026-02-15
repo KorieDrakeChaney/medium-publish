@@ -23,7 +23,6 @@ export default class MdBlogger extends Plugin {
   async onload() {
     await this.loadSettings();
 
-    await this.services.api.validateMediumToken();
     await this.services.api.validateDevtoToken();
 
     this.addRibbonIcon("book-up", "Publish Blog", async () => {
@@ -43,10 +42,10 @@ export default class MdBlogger extends Plugin {
           return;
         }
 
-        if (this.settings.validDevtoKey || this.settings.validMediumKey) {
+        if (this.settings.validDevtoKey) {
           createReactModal(this, "PublishModal").open();
         } else {
-          new Notice("Please enter valid API keys in the settings");
+          new Notice("Please enter a valid Dev.to API key in the settings");
         }
       } else {
         new Notice("No markdown file is being viewed");

@@ -4,6 +4,7 @@ import {
   checkChar,
   convertLanguageToValid,
   createHiddenParagraph,
+  createHiddenSpan,
   createImage,
   createLinkElement,
   createMarkdownTable,
@@ -18,962 +19,9 @@ import {
 import { Settings } from "src/settings";
 import { HtmlMarkdownContent, Markdown } from "src/types";
 import { PublishConfig } from "src/api/types";
-
-type ImageToken = {
-  type: "image";
-  url: string;
-  alt: string;
-  caption: string;
-  dimensions?: {
-    width: number;
-    height?: number;
-  };
-};
-
-type LinkToken = {
-  type: "link";
-  url: string;
-  text: string;
-};
-
-type MarkToken = {
-  type: "mark";
-};
-
-type MathToken = {
-  type: "math";
-  content: string;
-};
-
-type DelToken = {
-  type: "del";
-};
-
-type BoldToken = {
-  type: "strong";
-};
-
-type ItalicToken = {
-  type: "em";
-};
-
-type TextToken = {
-  type: "text";
-  text: string;
-};
-
-type CodeToken = {
-  type: "code";
-  content: string;
-};
-
-type FootnoteUrlToken = {
-  type: "footnoteUrl";
-  id: string;
-};
-
-type BlockBase = {
-  lineStart: number;
-  lineEnd: number;
-  content: string;
-  id?: string;
-};
-
-type Math = {
-  type: "math";
-};
-
-type List = {
-  type: "list";
-  ordered: boolean;
-};
-
-type Heading = {
-  type: "heading";
-  level: number;
-};
-
-type HorizontalRule = {
-  type: "horizontalRule";
-};
-
-type Break = {
-  type: "break";
-  count: number;
-};
-
-type CodeBlock = {
-  type: "codeBlock";
-  language: string;
-  caption: string;
-  toPng: boolean;
-  useLightTheme: boolean;
-};
-
-type Code = {
-  type: "code";
-};
-
-type Table = {
-  type: "table";
-  body: string[][];
-};
-
-type Content = {
-  type: "content";
-};
-
-type Callout = {
-  type: "callout";
-  callout: string;
-};
-
-type Quote = {
-  type: "quote";
-  quoteType: "blockquote" | "pullquote";
-};
-
-type Footnote = {
-  type: "footnote";
-  id: string;
-};
-
-type Block = (
-  | Code
-  | Math
-  | Table
-  | Content
-  | Callout
-  | Quote
-  | Break
-  | HorizontalRule
-  | Heading
-  | CodeBlock
-  | Footnote
-  | List
-) &
-  BlockBase;
-
-export const tokenizer = (markdown: string): Block[] => {
-  const blocks: Block[] = [];
-
-  let buffer = "";
-
-  let index = 0;
-  let lastLine = 0;
-
-  let lines = markdown.split("\n");
-
-  const flushBuffer = () => {
-    if (buffer.length > 0) {
-      let { content, id } = getId(buffer);
-
-      blocks.push({
-        type: "content",
-        lineStart: lastLine,
-        lineEnd: index,
-        content,
-        id
-      });
-      buffer = "";
-    }
-    lastLine = index;
-  };
-
-  const getId = (
-    content: string
-  ): {
-    content: string;
-    id: string | null;
-  } => {
-    let validId = false;
-    let idIndex = -1;
-    let id: string | null = null;
-    for (let i = content.length - 1; i >= 0; i--) {
-      if (
-        checkChar({ isLetter: true, isNumber: true, isUnique: "-" }, content[i])
-      ) {
-        validId = true;
-        continue;
-      } else if (content[i] === "^") {
-        idIndex = i;
-        break;
-      }
-      break;
-    }
-
-    if (validId && idIndex !== -1) {
-      id = content.slice(idIndex);
-      content = content.slice(0, idIndex);
-    }
-
-    return {
-      content,
-      id
-    };
-  };
-
-  while (index < lines.length) {
-    let line = lines[index];
-
-    if (line.trim().length === 0) {
-      flushBuffer();
-      let count = 1;
-      let breakIndex = index;
-
-      for (let i = index + 1; i < lines.length; i++) {
-        if (lines[i].trim().length === 0) {
-          count++;
-          breakIndex = i;
-        } else {
-          break;
-        }
-      }
-
-      blocks.push({
-        type: "break",
-        lineStart: index,
-        lineEnd: index,
-        content: "",
-        count
-      });
-
-      index = breakIndex + 1;
-
-      continue;
-    }
-
-    let rows = 0;
-
-    if (line.contains("|") && lines.length > index + 1) {
-      let headers = line.split("|");
-      let isIndirectTable = headers[0].trim().length !== 0;
-
-      let isValidTable = true;
-
-      let headerDivider = lines[index + 1].split("|");
-
-      if (headerDivider.length == 0 || !lines[index + 1].contains("|")) {
-        buffer += (buffer.length > 0 ? "\n" : "") + line;
-        index++;
-        continue;
-      }
-
-      for (let i = 0; i < headerDivider.length; i++) {
-        let trimmed = headerDivider[i].trim();
-        if (!isIndirectTable && (i === 0 || i === headerDivider.length - 1)) {
-          if (trimmed.length !== 0) {
-            isValidTable = false;
-            break;
-          }
-        } else {
-          if ("-".repeat(trimmed.length) !== trimmed) {
-            isValidTable = false;
-            break;
-          }
-
-          rows++;
-        }
-      }
-
-      if (
-        ((!isIndirectTable &&
-          headers[headers.length - 1].trim().length === 0) ||
-          isIndirectTable) &&
-        isValidTable
-      ) {
-        let filteredHeaders = (
-          isIndirectTable ? headers : headers.slice(1, -1)
-        ).map((header) => header.trim());
-
-        if (filteredHeaders.length < rows) {
-          filteredHeaders.push(
-            ...Array(rows - filteredHeaders.length).fill("")
-          );
-        }
-
-        let table: string[][] = [filteredHeaders];
-
-        for (let i = index + 2; i < lines.length; i++) {
-          let isValidTable = true;
-
-          let rows = lines[i].split("|");
-
-          if (rows.length == 0 || !lines[i].contains("|")) {
-            break;
-          }
-
-          for (let j = 0; j < rows.length; j++) {
-            let trimmed = rows[j].trim();
-            if (!isIndirectTable && (j === 0 || j === rows.length - 1)) {
-              if (trimmed.length !== 0) {
-                isValidTable = false;
-                break;
-              }
-            }
-          }
-
-          if (isValidTable) {
-            table.push(
-              (isIndirectTable ? rows : rows.slice(1, -1))
-                .map((row) => row.trim())
-                .slice(0, filteredHeaders.length)
-            );
-          } else {
-            break;
-          }
-        }
-
-        flushBuffer();
-        blocks.push({
-          type: "table",
-          lineStart: index,
-          lineEnd: index,
-          content: "",
-          body: table
-        });
-        index += table.length + 1;
-        continue;
-      }
-    }
-
-    for (let i = 0; i < line.length; i++) {
-      let char = line[i];
-      let nextChar = i + 1 < line.length ? line[i + 1] : null;
-
-      if ((char === " " && i === 4) || char === "\t") {
-        flushBuffer();
-        blocks.push({
-          type: "code",
-          lineEnd: index,
-          lineStart: index,
-          content: line.slice(i + 1)
-        });
-        break;
-      }
-
-      if (char !== " " && char !== "\t") {
-        if (char === "`") {
-          let count = 1;
-
-          for (let j = i + 1; j < line.length; j++) {
-            if (line[j] === "`") {
-              count++;
-            } else {
-              break;
-            }
-          }
-
-          if (count >= 3) {
-            let language = line.slice(i + count);
-            const match = language.match(/[^a-zA-Z0-9#+-]/);
-            let caption;
-            let toPng = false;
-            let useLightTheme = false;
-
-            if (match) {
-              const index = match.index;
-              const char = language.charAt(index);
-              const nextChar = language.charAt(index + 1);
-              if (char === "!" || char === "*") {
-                toPng = char === "!" || nextChar === "!";
-                useLightTheme = char === "*" || nextChar === "*";
-              }
-
-              let count = Number(toPng) + Number(useLightTheme);
-
-              caption = language.slice(index + count);
-
-              language = language.slice(0, index);
-            }
-
-            let content = "";
-            let hasEnd = false;
-            let lineStart = index;
-
-            for (let i = index + 1; i < lines.length; i++) {
-              let isLineEnd = false;
-              let line = lines[i];
-              for (let j = 0; j < line.length; j++) {
-                if (line[j] == "`") {
-                  let count = 1;
-                  for (let k = j + 1; k < line.length; k++) {
-                    if (line[k] == "`") {
-                      count++;
-                      j = k;
-                    } else {
-                      break;
-                    }
-                  }
-
-                  if (count >= 3) {
-                    isLineEnd = true;
-                    for (let k = j + 1; k < line.length; k++) {
-                      if (line[k] !== " " && line[k] !== "\t") {
-                        isLineEnd = false;
-                        break;
-                      }
-                    }
-
-                    if (isLineEnd) {
-                      break;
-                    }
-                  }
-                }
-              }
-
-              if (isLineEnd) {
-                index = i;
-                hasEnd = true;
-                break;
-              }
-
-              content += lines[i] + "\n";
-            }
-
-            if (!hasEnd) {
-              index = lines.length;
-            }
-
-            blocks.push({
-              type: "codeBlock",
-              language: language,
-              content,
-              caption: caption,
-              toPng,
-              useLightTheme,
-              lineStart,
-              lineEnd: index
-            });
-            break;
-          }
-        }
-
-        if (char === "#" && i === 0) {
-          let level = 1;
-          for (let j = 1; j < line.length; j++) {
-            if (line[j] === "#") {
-              level++;
-            } else {
-              break;
-            }
-          }
-
-          if (level <= 6 && line[level] === " ") {
-            let content = line.slice(level + 1);
-            flushBuffer();
-            blocks.push({
-              type: "heading",
-              level,
-              lineStart: index,
-              lineEnd: index,
-              content
-            });
-            break;
-          }
-        }
-
-        if (char === "-" || char === "*") {
-          if (nextChar == " ") {
-            let count = 2;
-
-            for (let j = i + 1; j < line.length; j++) {
-              if (
-                (count % 2 === 0 && line[i] === char) ||
-                (count % 2 !== 0 && line[i] === " " && count < 5)
-              ) {
-                count++;
-              } else {
-                break;
-              }
-            }
-
-            if (count === 5 && i <= 3) {
-              let hasCharacters = false;
-
-              for (let j = i + count - 1; j < line.length; j++) {
-                if (line[i] !== " " && line[i] !== "\t" && line[i] !== char) {
-                  hasCharacters = true;
-                  break;
-                }
-              }
-
-              if (!hasCharacters) {
-                flushBuffer();
-                blocks.push({
-                  type: "horizontalRule",
-                  lineStart: index,
-                  lineEnd: index,
-                  content: ""
-                });
-                break;
-              }
-            }
-
-            flushBuffer();
-
-            let { content, id } = getId(line.slice(i + 2));
-
-            let lastBlock = blocks[blocks.length - 1];
-
-            if (lastBlock.type === "list" && !lastBlock.ordered) {
-              lastBlock.content += "\n" + content;
-              lastBlock.lineEnd = index;
-            } else {
-              blocks.push({
-                type: "list",
-                ordered: false,
-                lineStart: index,
-                lineEnd: index,
-                content,
-                id
-              });
-            }
-            break;
-          } else {
-            let count = 1;
-
-            for (let j = i; j < line.length; j++) {
-              if (line[j] === char) {
-                count++;
-              } else {
-                break;
-              }
-            }
-
-            if (count >= 3 && count <= 4) {
-              let hasCharacters = false;
-
-              for (let j = i + count; j < line.length; j++) {
-                if (line[j] !== " " && line[j] !== "\t") {
-                  hasCharacters = true;
-                  break;
-                }
-              }
-
-              if (!hasCharacters) {
-                flushBuffer();
-                blocks.push({
-                  type: "horizontalRule",
-                  lineStart: index,
-                  lineEnd: index,
-                  content: ""
-                });
-                break;
-              }
-            }
-          }
-        }
-
-        if (char === "+" && nextChar === " ") {
-          flushBuffer();
-          let { content, id } = getId(line.slice(i + 2));
-          let lastBlock = blocks[blocks.length - 1];
-          if (lastBlock.type === "list" && !lastBlock.ordered) {
-            lastBlock.content += "\n" + content;
-            lastBlock.lineEnd = index;
-          } else {
-            blocks.push({
-              type: "list",
-              ordered: false,
-              lineStart: index,
-              lineEnd: index,
-              content,
-              id
-            });
-          }
-        }
-        if (char >= "1" && char <= "9") {
-          let count = 1;
-
-          for (let j = i + 1; j < line.length; j++) {
-            if (line[j] >= "0" && line[j] <= "9") {
-              count++;
-            } else {
-              break;
-            }
-          }
-
-          if (line[i + count] === "." && line[i + count + 1] === " ") {
-            flushBuffer();
-            let { content, id } = getId(line.slice(i + count + 2));
-            let lastBlock = blocks[blocks.length - 1];
-
-            if (lastBlock.type === "list" && lastBlock.ordered) {
-              lastBlock.content += "\n" + content;
-              lastBlock.lineEnd = index;
-            } else {
-              blocks.push({
-                type: "list",
-                ordered: true,
-                lineStart: index,
-                lineEnd: index,
-                content,
-                id
-              });
-            }
-            break;
-          }
-        }
-
-        if (char === "[" && nextChar === "^") {
-          let footnoteCursor = i + 2;
-          let hasEnd = false;
-
-          for (let i = footnoteCursor; i < line.length; i++) {
-            if (line[i] === "]") {
-              hasEnd = true;
-              footnoteCursor = i;
-              break;
-            }
-          }
-
-          let footnoteUrl = line.slice(i + 2, footnoteCursor);
-
-          if (hasEnd) {
-            let nextChar = line[footnoteCursor + 1];
-
-            let content = line.slice(footnoteCursor + 2);
-            let footnoteIndex = index;
-            for (let i = footnoteIndex + 1; i < lines.length; i++) {
-              let hasCharacters = false;
-              if (lines[i].startsWith("  ")) {
-                hasCharacters = true;
-                content += "\n";
-                content += lines[i].trim();
-                footnoteIndex = i;
-              }
-
-              if (!hasCharacters) {
-                break;
-              }
-            }
-
-            if (nextChar === ":") {
-              blocks.push({
-                type: "footnote",
-                content,
-                id: footnoteUrl,
-                lineStart: index,
-                lineEnd: footnoteIndex
-              });
-              break;
-            }
-          }
-        }
-
-        if (char === "^" && i === 0) {
-          let isValidId = true;
-
-          for (let j = 1; j < line.length; j++) {
-            if (
-              !checkChar(
-                {
-                  isLetter: true,
-                  isNumber: true,
-                  isUnique: "-"
-                },
-                line[j]
-              )
-            ) {
-              isValidId = false;
-              break;
-            }
-          }
-
-          if (isValidId) {
-            for (let j = blocks.length - 1; j >= 0; j--) {
-              if (blocks[j].type !== "break") {
-                blocks[j].id = line.slice(1);
-                break;
-              }
-            }
-
-            break;
-          }
-        }
-
-        if (char === "-") {
-          if (nextChar === " ") {
-            let count = 2;
-
-            for (let j = i + 1; j < line.length; j++) {
-              if (
-                (count % 2 === 0 && line[i] === "-" && count < 5) ||
-                (count % 2 !== 0 && line[i] === " " && count < 5)
-              ) {
-                count++;
-              } else {
-                break;
-              }
-            }
-
-            if (count === 5) {
-              flushBuffer();
-              blocks.push({
-                type: "horizontalRule",
-                lineStart: index,
-                lineEnd: index,
-                content: ""
-              });
-            } else {
-              flushBuffer();
-              let { content, id } = getId(line.slice(i + 2));
-
-              let lastBlock = blocks[blocks.length - 1];
-
-              if (lastBlock.type === "list" && !lastBlock.ordered) {
-                lastBlock.content += "\n" + content;
-                lastBlock.lineEnd = index;
-              } else {
-                blocks.push({
-                  type: "list",
-                  ordered: false,
-                  lineStart: index,
-                  lineEnd: index,
-                  content,
-                  id
-                });
-              }
-            }
-            break;
-          } else {
-            let count = 1;
-
-            for (let j = i + 1; j < line.length; j++) {
-              if (line[i] === "-") {
-                count++;
-              } else {
-                break;
-              }
-            }
-
-            if (count == 3 || count == 4) {
-              flushBuffer();
-              blocks.push({
-                type: "horizontalRule",
-                lineStart: index,
-                lineEnd: index,
-                content: ""
-              });
-              break;
-            }
-          }
-        }
-
-        if (char === ">") {
-          if (nextChar === ">") {
-            let quoteIndex = index;
-            let content = line.slice(i + 2);
-            for (let i = index + 1; i < lines.length; i++) {
-              let hasEnd = false;
-              for (let j = 0; j < lines[i].length; j++) {
-                if (
-                  lines[i][j] !== ">" &&
-                  lines[i][j] !== " " &&
-                  lines[i][j] !== "\t"
-                ) {
-                  break;
-                } else if (lines[i][j] === ">" && lines[i][j + 1] !== ">") {
-                  content += "\n" + lines[i].slice(j + 1);
-                  hasEnd = true;
-                  break;
-                }
-              }
-
-              if (!hasEnd) {
-                break;
-              }
-            }
-
-            flushBuffer();
-            blocks.push({
-              type: "quote",
-              quoteType: "pullquote",
-              lineStart: index,
-              lineEnd: quoteIndex,
-              content
-            });
-
-            index = quoteIndex;
-            break;
-          } else {
-            let quoteIndex = index;
-            let callout: string = "";
-            let content = line.slice(i + 1);
-
-            for (let j = i + 1; j < line.length; j++) {
-              if (line[j] !== " " && line[j] !== "\t" && line[j] !== "[") {
-                break;
-              } else if (line[j] === "[" && line[j + 1] === "!") {
-                let hasEnd = false;
-                let calloutEnd = j;
-                for (let k = j + 1; j < line.length; k++) {
-                  if (line[k] === "]") {
-                    hasEnd = true;
-                    calloutEnd = k;
-                    break;
-                  }
-                }
-
-                if (hasEnd) {
-                  callout = line.slice(j + 1, calloutEnd);
-                  break;
-                }
-
-                i = hasEnd ? calloutEnd : line.length;
-              }
-            }
-
-            for (let i = quoteIndex + 1; i < lines.length; i++) {
-              let isQuote = false;
-              for (let j = 0; j < lines[i].length; j++) {
-                if (lines[i][j] !== " " && lines[i][j] !== "\t") {
-                  if (lines[i][j] === ">") {
-                    quoteIndex = i;
-                    isQuote = true;
-                    content += "\n" + lines[i].slice(j + 1);
-                  }
-                  break;
-                }
-              }
-
-              if (!isQuote) {
-                break;
-              }
-            }
-
-            if (callout.length > 0) {
-              flushBuffer();
-              blocks.push({
-                type: "callout",
-                callout: callout.slice(1),
-                lineStart: index,
-                lineEnd: quoteIndex,
-                content
-              });
-
-              index = quoteIndex;
-              break;
-            } else {
-              flushBuffer();
-              blocks.push({
-                type: "quote",
-                quoteType: "blockquote",
-                lineStart: index,
-                lineEnd: quoteIndex,
-                content
-              });
-
-              index = quoteIndex;
-              break;
-            }
-          }
-        }
-
-        let isMath = false;
-        let isInlineMath = false;
-
-        let mathIndex = index;
-
-        let mathBuffer = line.slice(0, i);
-
-        for (
-          let j = i;
-          j < (mathIndex < lines.length ? lines[mathIndex].length : 0);
-          j++
-        ) {
-          let line = lines[mathIndex];
-          if ((line[j] === "$" && line[j + 1] === "$") || line[j] === "$") {
-            isMath = true;
-            isInlineMath = line[j + 1] !== "$";
-            let hasEnd = false;
-            let mathCursor = isInlineMath ? j : j + 1;
-            let content = "";
-
-            buffer += (buffer.length > 0 ? "\n" : "") + mathBuffer;
-            flushBuffer();
-            mathBuffer = "";
-
-            for (let k = mathIndex; k < lines.length; k++) {
-              let line = lines[k];
-              let origin = k == mathIndex ? mathCursor + 1 : 0;
-              for (
-                let l = mathIndex == k ? mathCursor + 1 : 0;
-                l < line.length;
-                l++
-              ) {
-                if (
-                  !isInlineMath
-                    ? line[l] === "$" && line[l + 1] === "$"
-                    : line[l] === "$"
-                ) {
-                  mathCursor = l;
-                  hasEnd = true;
-                  break;
-                }
-              }
-
-              content +=
-                (content.length > 0 ? "\n" : "") +
-                line.slice(origin, hasEnd ? mathCursor : line.length);
-
-              if (hasEnd) {
-                mathIndex = k;
-                break;
-              }
-            }
-
-            blocks.push({
-              type: "math",
-              content,
-              lineStart: index,
-              lineEnd: mathIndex
-            });
-
-            if (!hasEnd) {
-              mathIndex = lines.length;
-              mathCursor = line.length;
-            }
-
-            j = mathCursor + (isInlineMath ? 0 : 1);
-          } else {
-            mathBuffer += line[j];
-          }
-        }
-
-        if (mathBuffer.length > 0) {
-          buffer += (buffer.length > 0 ? "\n" : "") + mathBuffer;
-        }
-
-        if (isMath) {
-          index = mathIndex;
-          break;
-        }
-
-        break;
-      }
-    }
-    index++;
-  }
-
-  flushBuffer();
-
-  return blocks;
-};
-
-type Token =
-  | MarkToken
-  | MathToken
-  | DelToken
-  | ImageToken
-  | LinkToken
-  | BoldToken
-  | ItalicToken
-  | TextToken
-  | FootnoteUrlToken
-  | Break
-  | CodeToken;
+import { ImageToken, LinkToken, Token } from "./token";
+import { Block, BlockBase, Footnote, List } from "./tokenizer";
+export { Tokenizer } from "./tokenizer";
 
 type TokenizerState =
   | "TEXT"
@@ -1222,16 +270,6 @@ export const tokenizeBlock = (
           if (!hasEnd) {
             cursor = line.length + 1;
           }
-
-          tokens.push({
-            type: "code",
-            content: line.slice(
-              backtickCursor,
-              hasEnd ? cursor - (count - 1) : cursor - 1
-            )
-          });
-          state = "TEXT";
-          break;
         }
         case "BRACKET": {
           if (char === "[") {
@@ -1676,13 +714,6 @@ export const tokenizeBlock = (
 
     openTokens = [];
 
-    if (index < lines.length - 1) {
-      tokens.push({
-        type: "break",
-        count: 1
-      });
-    }
-
     index++;
   }
 
@@ -1706,16 +737,16 @@ export const parser = async (
   blocks: Block[],
   app: App,
   config: PublishConfig,
-  appSettings: Settings
+  appSettings: Settings,
+  rawMarkdown: string = "",
+  container: HTMLElement = createDiv(),
+  createTOC: boolean = true
 ): Promise<HtmlMarkdownContent> => {
   let markdown: Markdown = {
     content: ""
   };
 
   let tocMarkdown = "# Table of Contents\n";
-  let rawMarkdown = "";
-
-  const container = createDiv();
 
   const currentDocument = document.querySelector(
     ".workspace-leaf.mod-active .workspace-leaf-content .view-content .markdown-source-view .cm-content"
@@ -1819,23 +850,7 @@ export const parser = async (
 
         container.appendChild(heading);
 
-        if (
-          config.medium &&
-          markdown.content.length === 0 &&
-          block.level === 1 &&
-          !markdown.title &&
-          !markdown.subtitle
-        ) {
-          markdown.title = heading.outerHTML + "\n";
-        } else if (
-          config.medium &&
-          markdown.content.length === 0 &&
-          !markdown.subtitle
-        ) {
-          markdown.subtitle = heading.outerHTML + "\n";
-        } else {
-          markdown.content += heading.outerHTML + "\n";
-        }
+        markdown.content += heading.outerHTML + "\n";
 
         tocMarkdown += `${"  ".repeat(block.level - 1)}- [${
           heading.textContent
@@ -1848,28 +863,58 @@ export const parser = async (
         const p = document.createElement("p");
         const list = document.createElement(block.ordered ? "ol" : "ul");
 
-        let items = block.content.split("\n");
-        for (let i = 0; i < items.length; i++) {
-          const item = document.createElement("li");
-          let markdown_list = block.ordered ? `${i + 1}. ` : "- ";
-          rawMarkdown += markdown_list;
-          markdown.content += markdown_list;
+        const item = document.createElement("li");
+        if (block.number) item.setAttribute("value", block.number.toString());
 
-          rawMarkdown +=
-            parseBlock(
-              tokenizeBlock(items[i]),
-              app,
-              appSettings,
-              item,
-              footnoteMap,
-              markdown
-            ) + "\n";
+        for (const child of block.children) {
+          let scope = " ".repeat(child.scope * 4);
 
-          list.appendChild(item);
+          if (child.type === "list") {
+            const childList = document.createElement(
+              child.ordered ? "ol" : "ul"
+            );
+            const { rawMarkdown: newRawMarkdown, markdown: newMarkdown } =
+              await parser(
+                [child],
+                app,
+                config,
+                appSettings,
+                rawMarkdown,
+                childList,
+                false
+              );
+
+            markdown.content = newMarkdown.content;
+            rawMarkdown = newRawMarkdown;
+
+            item.appendChild(childList);
+          } else {
+            let lines = child.content.split("\n");
+            let preface = `${block.ordered ? block.number + ". " : "- "}`;
+
+            for (let i = 0; i < lines.length; i++) {
+              let line = lines[i];
+              const newRawMarkdown = parseBlock(
+                tokenizeBlock(line),
+                app,
+                appSettings,
+                item,
+                footnoteMap
+              );
+
+              let content =
+                scope + (i === 0 ? preface : "") + newRawMarkdown + "\n";
+              markdown.content += content;
+              rawMarkdown += content;
+
+              if (i !== lines.length - 1) {
+                item.appendChild(document.createElement("br"));
+              }
+            }
+          }
         }
+        list.appendChild(item);
 
-        markdown.content += "\n";
-        rawMarkdown += "\n";
         p.appendChild(list);
 
         container.appendChild(p);
@@ -2138,7 +1183,7 @@ export const parser = async (
             code.textContent = block.content;
             codeBlock.appendChild(code);
           } else {
-            codeBlock.innerHTML = `<span style="visibility: hidden;">&#8203;</span>`;
+            codeBlock.replaceWith(createHiddenSpan());
             const tokens = tokenizeBlock(block.content);
 
             parseBlock(tokens, app, appSettings, codeBlock, footnoteMap);
@@ -2345,9 +1390,122 @@ export const parser = async (
   return {
     html: container,
     markdown: markdown,
-    rawMarkdown: tocMarkdown + "\n" + rawMarkdown
+    rawMarkdown: (createTOC ? tocMarkdown + "\n" : "") + rawMarkdown
   };
 };
+
+export class Parser {
+  private app: App;
+  private appSettings: Settings;
+  private config: PublishConfig;
+  private markdownView: MarkdownView;
+  private currentDocument: HTMLElement;
+  private currentValue: string;
+  private footnoteMap: Record<string, string>;
+  private footnotes: Record<string, Footnote & BlockBase>;
+  private markdown: Markdown;
+  private rawMarkdown: string;
+  private createTOC: boolean;
+  private blocks: Block[];
+
+  constructor(
+    app: App,
+    blocks: Block[],
+    config: PublishConfig,
+    appSettings: Settings,
+    markdownView: MarkdownView,
+    currentDocument: HTMLElement,
+    currentValue: string,
+    footnoteMap: Record<string, string>,
+    footnotes: Record<string, Footnote & BlockBase>,
+    markdown: Markdown,
+    rawMarkdown: string,
+    createTOC: boolean
+  ) {
+    this.app = app;
+    this.blocks = blocks;
+    this.config = config;
+    this.appSettings = appSettings;
+    this.markdownView = markdownView;
+    this.currentDocument = currentDocument;
+    this.currentValue = currentValue;
+    this.footnoteMap = footnoteMap;
+    this.footnotes = footnotes;
+    this.markdown = markdown;
+    this.rawMarkdown = rawMarkdown;
+    this.createTOC = createTOC;
+  }
+
+  private async parseList(
+    block: List & BlockBase,
+    scope: number = 0,
+    container: HTMLElement = createEl("p")
+  ) {
+    const item = createEl("li");
+
+    for (const child of block.children) {
+      let childScope = " ".repeat(scope * 4);
+
+      if (child.type === "list") {
+        const childList = createEl(child.ordered ? "ol" : "ul");
+        const { rawMarkdown: newRawMarkdown, markdown: newMarkdown } =
+          await this.parseList(child, scope + 1, childList);
+
+        this.markdown.content = newMarkdown.content;
+        this.rawMarkdown = newRawMarkdown;
+
+        item.appendChild(childList);
+      } else {
+        let lines = child.content.split("\n");
+        let preface = `${block.ordered ? block.number + ". " : "- "}`;
+
+        for (let i = 0; i < lines.length; i++) {
+          let line = lines[i];
+          const newRawMarkdown = parseBlock(
+            tokenizeBlock(line),
+            this.app,
+            this.appSettings,
+            item,
+            this.footnoteMap
+          );
+
+          let content =
+            childScope + (i === 0 ? preface : "") + newRawMarkdown + "\n";
+          this.markdown.content += content;
+          this.rawMarkdown += content;
+
+          if (i !== lines.length - 1) {
+            item.appendChild(createEl("br"));
+          }
+        }
+      }
+    }
+    container.appendChild(item);
+
+    return { markdown: this.markdown, rawMarkdown: this.rawMarkdown };
+  }
+
+  public async parse(): Promise<HtmlMarkdownContent> {
+    let container = createEl("div");
+    let tocMarkdown = "# Table of Contents\n";
+
+    for (let index = 0; index < this.blocks.length; index++) {
+      const block = this.blocks[index];
+
+      switch (block.type) {
+        case "list":
+          this.parseList(block);
+          break;
+      }
+    }
+
+    return {
+      html: container,
+      markdown: markdown,
+      rawMarkdown: (createTOC ? tocMarkdown + "\n" : "") + rawMarkdown
+    };
+  }
+}
 
 const parseBlock = (
   tokens: Token[],
@@ -2373,13 +1531,6 @@ const parseBlock = (
 
   for (const token of tokens) {
     switch (token.type) {
-      case "break": {
-        container.appendChild(document.createElement("br"));
-        markdown.content += "\n\n";
-        rawMarkdown += "\n\n";
-        break;
-      }
-
       case "text": {
         if (elementQueue.length > 0) {
           elementQueue[elementQueue.length - 1].appendText(token.text);
@@ -2401,10 +1552,10 @@ const parseBlock = (
           token.type === "del"
             ? "~~"
             : token.type === "mark"
-            ? "=="
-            : token.type === "em"
-            ? "*"
-            : "**";
+              ? "=="
+              : token.type === "em"
+                ? "*"
+                : "**";
 
         if (found) break;
         if (elementQueue.length > 0) {

@@ -2,7 +2,7 @@
 
 ## Description
 
-This plugin allows you to publish your notes to Medium or Dev.to directly from Obsidian.md. Additionally, you can generate Markdown or HTML content to publish on your site of choice.
+This plugin allows you to publish your notes to Dev.to directly from Obsidian.md. Additionally, you can generate Markdown or HTML content to publish on your site of choice.
 
 ## TOC
 
@@ -13,7 +13,6 @@ This plugin allows you to publish your notes to Medium or Dev.to directly from O
 
 ## Features
 
-- Publish notes to Medium
 - Publish notes to Dev.to
 - Generate Markdown content
 - Generate HTML content
@@ -29,15 +28,11 @@ This plugin allows you to publish your notes to Medium or Dev.to directly from O
 
 1. Open a note in Obsidian.
 2. Click the `Publish Blog` button in the ribbon.
-3. If needed to publish, you can select one of the providers or just continue without.
+3. If needed to publish, you can select Dev.to or just continue without.
 4. Fill in the required fields (title, tags, etc.).
 5. Click "Publish" to publish your note or "Generate" to create Markdown/HTML content.
 
 ## Configuration
-
-### Medium Configuration
-
-`Currently, to have access to the Medium API, you need an access token. Which is currently not available to create unless you already have an access token.`
 
 ### Dev.to Configuration
 

@@ -6,29 +6,13 @@ import { Modal } from "obsidian";
 
 interface TokenValidatorModalProps {
   modal: Modal;
-  site: "Medium" | "Dev.to" | "Imgur";
+  site: "Dev.to" | "Imgur";
 }
 
-const Tutorial = ({ site }: { site: "Medium" | "Dev.to" | "Imgur" }) => {
+const Tutorial = ({ site }: { site: "Dev.to" | "Imgur" }) => {
   return (
     <>
-      {site === "Medium" ? (
-        <div>
-          <h2>Integrate Medium</h2>
-          <ul>
-            <li>
-              Go to your Medium{" "}
-              <a href="https://medium.com/me/settings/security">
-                security and apps
-              </a>
-            </li>
-            <li>
-              Click on the integration tokens and create a new token. Copy the
-              token and paste it below.
-            </li>
-          </ul>
-        </div>
-      ) : site === "Dev.to" ? (
+      {site === "Dev.to" ? (
         <div>
           <h2>Integrate Dev.to</h2>
           <ul>
@@ -80,7 +64,7 @@ export const TokenValidatorModal = ({
 
 interface TokenInputProps {
   onConfirm: () => void;
-  site: "Medium" | "Dev.to" | "Imgur";
+  site: "Dev.to" | "Imgur";
 }
 
 const TokenInput = ({ onConfirm, site }: TokenInputProps) => {
@@ -89,9 +73,7 @@ const TokenInput = ({ onConfirm, site }: TokenInputProps) => {
 
   useEffect(() => {
     setToken(
-      site === "Medium"
-        ? plugin.settings.mediumToken
-        : site === "Dev.to"
+      site === "Dev.to"
         ? plugin.settings.devtoToken
         : plugin.settings.imgurClientId
     );
@@ -99,17 +81,6 @@ const TokenInput = ({ onConfirm, site }: TokenInputProps) => {
 
   const onClick = async () => {
     switch (site) {
-      case "Medium":
-        await plugin.services.api
-          .validateMediumToken(token)
-          .then(async (isHealthy) => {
-            if (isHealthy) {
-              plugin.settings.mediumToken = token;
-              await plugin.saveSettings();
-              onConfirm();
-            }
-          });
-        break;
       case "Dev.to":
         await plugin.services.api
           .validateDevtoToken(token)
