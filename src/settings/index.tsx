@@ -181,7 +181,8 @@ const SettingFileInput = ({
         className="suggestion-container"
         tabIndex={0}
         style={{
-          display: focused ? "block" : "none"
+          display: focused ? "block" : "none",
+          overflow: "scroll"
         }}
         onBlur={() => setFocused(false)}
       >
