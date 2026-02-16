@@ -134,7 +134,7 @@ const SettingFileInput = ({
   useEffect(() => {
     setFolders(
       plugin.app.vault.getAllFolders(true).map((folder) => {
-        return folder.name.length > 0 ? folder.name : "/";
+        return folder.path;
       })
     );
   }, []);
