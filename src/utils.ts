@@ -154,7 +154,7 @@ export const saveHtmlAsPng = async (
     }
     const arrayBuffer = bytes.buffer;
 
-    await app.vault.createBinary(filePath, arrayBuffer);
+    await app.vault.adapter.writeBinary(filePath, arrayBuffer);
 
     return { width: targetWidth, height: targetHeight };
   } catch (error) {
