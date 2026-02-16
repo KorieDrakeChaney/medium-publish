@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { MarkdownView, Notice } from "obsidian";
 import {
   Button,
-  DropDown,
   ContentViewer,
   SettingItem,
   Toggle,
@@ -12,42 +11,9 @@ import {
 } from "src/ui/components";
 import type { PublishBody } from "src/api/response";
 import Tag from "./tag";
-import { PublishConfig } from "src/api/types";
-import { DevtoIcon } from "src/icons";
-import { FaCheck, FaXmark } from "react-icons/fa6";
 import { PublishRequest } from "src/api/request";
-import SettingNumberInput from "src/ui/components/number-input/number-input";
 
 type PublishStatus = "public" | "draft" | "unlisted";
-
-interface SelectProps {
-  onToggle: (isSelected: boolean) => void;
-  disabled?: boolean;
-}
-
-const Select = ({ onToggle, disabled }: SelectProps) => {
-  const [isSelected, setIsSelected] = useState(false);
-  return (
-    <div
-      className={`${styles["select-item-container"]} ${
-        isSelected ? styles["active"] : ""
-      } ${disabled ? styles["disabled"] : ""}`}
-      onClick={() => {
-        if (disabled) return;
-        setIsSelected(!isSelected);
-        onToggle(!isSelected);
-      }}
-    >
-      <DevtoIcon />
-      <div
-        className={`${styles["select"]} ${isSelected ? styles["active"] : ""} `}
-      >
-        {isSelected ? <FaCheck /> : <FaXmark />}
-      </div>
-      <div className={styles["select-site"]}>Dev.to</div>
-    </div>
-  );
-};
 
 export const PublishModal = () => {
   const { plugin } = usePluginContext();
@@ -61,12 +27,7 @@ export const PublishModal = () => {
   const [canonicalURL, setCanonicalURL] = useState("");
   const [series, setSeries] = useState<string>("");
   const [description, setDescription] = useState<string>("");
-  const [init, setInit] = useState(false);
   const [data, setData] = useState<PublishBody | null>(null);
-
-  const [publishConfig, setPublishConfig] = useState<PublishConfig>({
-    devto: false
-  });
 
   useEffect(() => {
     const load = async () => {
@@ -90,79 +51,31 @@ export const PublishModal = () => {
       description,
       series,
       canonicalURL,
-      config: publishConfig,
+      config: { devto: true },
       tags: Object.values(tags),
       publishStatus: status
     };
 
     setLoading(true);
 
-    if (publishConfig.devto) {
-      if (!title && publishConfig.devto) {
-        new Notice("Title is required for Dev.to");
-        setError("Title is required for Dev.to");
-        setErrorCount(errorCount + 1);
-        setLoading(false);
-        return;
-      }
-      await plugin.services.api.publish(body, currentFile!).then((response) => {
-        if (response) {
-          setData(response.data);
-          new Notice("Published successfully");
-        } else {
-          new Notice("Error while publishing");
-          setError("Error while publishing");
-        }
-        setLoading(false);
-      });
-    } else {
-      const contentResult = await plugin.services.api.getContent(
-        currentFile!,
-        title,
-        publishConfig
-      );
-      if (!contentResult) return;
-      const { html, rawMarkdown } = contentResult;
-
-      setData({
-        html,
-        markdown: rawMarkdown
-      });
+    if (!title) {
+      new Notice("Title is required for Dev.to");
+      setError("Title is required for Dev.to");
+      setErrorCount(errorCount + 1);
+      setLoading(false);
+      return;
     }
+    await plugin.services.api.publish(body, currentFile!).then((response) => {
+      if (response) {
+        setData(response.data);
+        new Notice("Published successfully");
+      } else {
+        new Notice("Error while publishing");
+        setError("Error while publishing");
+      }
+      setLoading(false);
+    });
   };
-
-  if (!init) {
-    return (
-      <div className={styles["publish-select-container"]}>
-        <div>
-          <h2>Publish to</h2>
-        </div>
-        <div className={styles["select-container"]}>
-          <Select
-            onToggle={(isSelected) =>
-              setPublishConfig({ ...publishConfig, devto: isSelected })
-            }
-            disabled={loading || !plugin.settings.validDevtoKey}
-          />
-        </div>
-
-        <div className={styles["publish-end-container"]}>
-          <div className={styles["loading"]}>
-            {loading && "Validating tokens..."}
-          </div>
-          <div className={styles["select-button"]}>
-            <Button
-              style="primary"
-              name="Continue"
-              onClick={() => {
-                setInit(true);
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -273,113 +186,103 @@ export const PublishModal = () => {
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
-              {publishConfig.devto && (
-                <div className={styles["publish-input"]}>
-                  <label className={styles["publish-label"]}>Tags</label>
-                  <input
-                    placeholder={
-                      Object.keys(tags).length >= 5 ? "Max 5 tags" : "Add tags"
-                    }
-                    disabled={Object.keys(tags).length >= 5}
-                    maxLength={25}
-                    type="text"
-                    onKeyDown={(e) => {
-                      if (
-                        e.key === "Enter" &&
-                        e.currentTarget.value.length > 0
-                      ) {
-                        const newTags = { ...tags };
-                        let value = e.currentTarget.value;
-                        if (newTags[value]) {
-                          new Notice("Tag already exists");
-                        } else {
-                          newTags[value] = e.currentTarget.value;
-                          setTags(newTags);
-                          e.currentTarget.value = "";
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              )}
-              {publishConfig.devto && (
-                <div
-                  className={styles["tags-container"]}
-                  style={{
-                    display: Object.keys(tags).length > 0 ? "flex" : "none"
-                  }}
-                >
-                  {Object.entries(tags).map(([key, value]) => (
-                    <Tag
-                      key={key}
-                      tag={value}
-                      onDelete={() => {
-                        const newTags = { ...tags };
-                        delete newTags[key];
-                        setTags(newTags);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-              {publishConfig.devto && (
-                <div className={styles["publish-input"]}>
-                  <label className={styles["publish-label"]}>
-                    Canonical URL
-                  </label>
-                  <input
-                    type="text"
-                    value={canonicalURL}
-                    onChange={(e) => setCanonicalURL(e.target.value)}
-                    placeholder="https://example.com/article"
-                  />
-                </div>
-              )}
-            </VisualDropdown>
-            {publishConfig.devto && (
-              <VisualDropdown title="Dev.to" open>
-                <label className={styles["publish-label"]}>Description</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="A short description of the article"
-                  style={{
-                    resize: "none"
-                  }}
-                />
-                <label className={styles["publish-label"]}>Series</label>
+              <div className={styles["publish-input"]}>
+                <label className={styles["publish-label"]}>Tags</label>
                 <input
+                  placeholder={
+                    Object.keys(tags).length >= 5 ? "Max 5 tags" : "Add tags"
+                  }
+                  disabled={Object.keys(tags).length >= 5}
+                  maxLength={25}
                   type="text"
-                  value={series}
-                  onChange={(e) => setSeries(e.target.value)}
-                  placeholder="Series name"
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      e.currentTarget.value.length > 0
+                    ) {
+                      const newTags = { ...tags };
+                      let value = e.currentTarget.value;
+                      if (newTags[value]) {
+                        new Notice("Tag already exists");
+                      } else {
+                        newTags[value] = e.currentTarget.value;
+                        setTags(newTags);
+                        e.currentTarget.value = "";
+                      }
+                    }
+                  }}
                 />
-              </VisualDropdown>
-            )}
-          </div>
-          {publishConfig.devto && (
-            <div>
-              <label className={styles["publish-label"]}>Publish Status</label>
+              </div>
               <div
-                className={styles["publish-status-container"]}
+                className={styles["tags-container"]}
                 style={{
-                  gridTemplateColumns: "repeat(2, 1fr)"
+                  display: Object.keys(tags).length > 0 ? "flex" : "none"
                 }}
               >
-                {(["public", "unlisted"] as PublishStatus[]).map((s) => (
-                  <div
-                    key={s}
-                    className={`${styles["publish-status-button"]} ${
-                      s === status ? styles["active"] : ""
-                    }`}
-                    onClick={() => setStatus(s)}
-                  >
-                    {s}
-                  </div>
+                {Object.entries(tags).map(([key, value]) => (
+                  <Tag
+                    key={key}
+                    tag={value}
+                    onDelete={() => {
+                      const newTags = { ...tags };
+                      delete newTags[key];
+                      setTags(newTags);
+                    }}
+                  />
                 ))}
               </div>
+              <div className={styles["publish-input"]}>
+                <label className={styles["publish-label"]}>
+                  Canonical URL
+                </label>
+                <input
+                  type="text"
+                  value={canonicalURL}
+                  onChange={(e) => setCanonicalURL(e.target.value)}
+                  placeholder="https://example.com/article"
+                />
+              </div>
+            </VisualDropdown>
+            <VisualDropdown title="Dev.to" open>
+              <label className={styles["publish-label"]}>Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="A short description of the article"
+                style={{
+                  resize: "none"
+                }}
+              />
+              <label className={styles["publish-label"]}>Series</label>
+              <input
+                type="text"
+                value={series}
+                onChange={(e) => setSeries(e.target.value)}
+                placeholder="Series name"
+              />
+            </VisualDropdown>
+          </div>
+          <div>
+            <label className={styles["publish-label"]}>Publish Status</label>
+            <div
+              className={styles["publish-status-container"]}
+              style={{
+                gridTemplateColumns: "repeat(2, 1fr)"
+              }}
+            >
+              {(["public", "unlisted"] as PublishStatus[]).map((s) => (
+                <div
+                  key={s}
+                  className={`${styles["publish-status-button"]} ${
+                    s === status ? styles["active"] : ""
+                  }`}
+                  onClick={() => setStatus(s)}
+                >
+                  {s}
+                </div>
+              ))}
             </div>
-          )}
+          </div>
           <div className={styles["publish-end-container"]}>
             <div>
               {error && (
@@ -393,7 +296,7 @@ export const PublishModal = () => {
             </div>
             <Button
               style="primary"
-              name={!publishConfig.devto ? "Generate" : "Publish"}
+              name="Publish"
               onClick={onPublish}
             />
           </div>
