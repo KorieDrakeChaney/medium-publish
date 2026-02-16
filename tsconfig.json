@@ -2,7 +2,6 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
@@ -14,8 +13,8 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "noEmit": true,
     "lib": ["dom", "dom.iterable", "ES2023"]
   },
-
   "include": ["src/**/*", "./styles.d.ts"]
 }
