@@ -177,22 +177,31 @@ const SettingFileInput = ({
         }}
         ref={inputRef}
       />
-      <Dropdown
-        options={folders.reduce(
-          (acc, folder) => {
-            acc[folder] = folder;
-            return acc;
-          },
-          {} as Record<string, string>
-        )}
-        value={inputValue}
-        onChange={(value) => {
-          const selectedFolder = value as string;
-          onSelect({ item: selectedFolder, result: { matches: [], score: 0 } });
-          setInputValue(selectedFolder);
-          setFocused(false);
+      <div
+        className="suggestion-container"
+        tabIndex={0}
+        style={{
+          display: focused ? "block" : "none"
         }}
-      />
+        onBlur={() => setFocused(false)}
+      >
+        {results.map((result) => (
+          <div
+            className={styles["suggestion-item"]}
+            onClick={() => {
+              onSelect(result);
+              setInputValue(result.item);
+              search({
+                target: { value: result.item }
+              } as ChangeEvent<HTMLInputElement>);
+              setFocused(false);
+            }}
+            key={result.item}
+          >
+            {result.item}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
